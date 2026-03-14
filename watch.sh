@@ -7,7 +7,8 @@ trap cleanup TERM
 
 restart_roc(){
     kill $ROC_DEV_ID
-    roc build --dev
+    rm main
+    roc build
     ./main &
     ROC_DEV_ID=$!
 }

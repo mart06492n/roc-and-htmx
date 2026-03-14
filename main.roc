@@ -3,10 +3,9 @@ app [init_model, update_model, handle_request!, Model] {
 }
 
 import webserver.Http
-
-Model : Str
-
-index_html = |title, description|
+index_html : Model -> Str
+index_html = |model|
+    stuff = Str.join_with(List.map(model, |e| "<div>${e}</div>"), "\n")
     """
     <!doctype html>
     <html lang="en">
@@ -14,44 +13,57 @@ index_html = |title, description|
         <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous"></script>
       </head>
       <body>
-        <form hx-post="/store">
-            <input type="checkbox" switch />
-            <input name="title" type="text" value="${title}">
-            <input name="description" type="text" value="${description}">
+        <form hx-post="/store" hx-swap="afterend">
+            <input name="title" type="text">
             <button type="submit">Submit</button>
         </form>
+        ${stuff}
       </body>
     </html>
     """
 
-init_model = "World"
+Model : List Str
+
+init_model = ["World"]
 
 update_model : Model, List (List U8) -> Result Model _
 update_model = |model, event_list|
     event_list
     |> List.walk_try(
         model,
-        |_acc_model, event|
-            Str.from_utf8(event)
-            |> Result.map_err(|_| InvalidEvent),
+        |acc, event|
+            Ok(List.concat([Str.from_utf8(event)?], acc)),
     )
 
 handle_request! : Http.Request, Model => Result Http.Response _
 handle_request! = |request, model|
     when request.method is
         Get ->
-            Ok(
-                {
-                    body: Str.to_utf8(index_html "" ""),
-                    headers: [],
-                    status: 200,
-                },
-            )
+            when request.url is
+                "/" ->
+                    Ok(
+                        {
+                            body: Str.to_utf8(index_html model),
+                            headers: [],
+                            status: 200,
+                        },
+                    )
+
+                _ ->
+                    Ok(
+                        {
+                            body: Str.to_utf8("Page Not Found"),
+                            headers: [],
+                            status: 200,
+                        },
+                    )
 
         Post(save_event!) ->
+            entry = List.get(Str.split_on(Str.from_utf8(request.body)?, "="), 1)?
+            save_event!(Str.to_utf8(entry))
             Ok(
                 {
-                    body: Str.to_utf8(Str.join_with(Str.split_on(Str.from_utf8(request.body)?, "&"), "_")),
+                    body: Str.to_utf8("<div>${entry}</div>"),
                     headers: [],
                     status: 200,
                 },
